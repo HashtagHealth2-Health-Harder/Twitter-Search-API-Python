@@ -74,6 +74,7 @@ class TwitterSearch(metaclass=ABCMeta):
             }
             req = requests.get(url, headers=headers)
             # response = urllib2.urlopen(req)
+            # print(req.text)
             data = json.loads(req.text)
             return data
 
@@ -86,7 +87,7 @@ class TwitterSearch(metaclass=ABCMeta):
             return self.execute_search(url)
 
     @staticmethod
-    def parse_tweets(items_html):
+    def parse_tweets(self, items_html):
         """
         Parses Tweets from the given HTML
         :param items_html: The HTML block with tweets
@@ -123,6 +124,15 @@ class TwitterSearch(metaclass=ABCMeta):
                 tweet['user_screen_name'] = user_details_div['data-user-id']
                 tweet['user_name'] = user_details_div['data-name']
 
+            data = self.find_geo(tweet)
+
+            if data is not None:
+                geo_soup = BeautifulSoup()
+                geo_data = geo_soup.find('span',
+                                         class_='permalink-tweet-geo-text')
+                geo_location_text = geo_data.text
+                geo_location_search = geo_data.select("a")[0]['href']
+
             # Tweet date
             date_span = li.find("span", class_="_timestamp")
             if date_span is not None:
@@ -140,6 +150,33 @@ class TwitterSearch(metaclass=ABCMeta):
 
             tweets.append(tweet)
         return tweets
+
+    def find_geo(tweet):
+        """
+        for given tweet, finds the geo data by requesting original tweet itself
+        :param tweet: the tweet being requested
+        :return: the geo tag information
+        """
+        try:
+            # Specify a user agent to prevent Twitter from returning a profile card
+            headers = {
+                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.'
+                              '86 Safari/537.36'
+            }
+            url = ("https://twitter.com/" + tweet['user_screen_name'] +
+                   '/status/' + tweet['tweet_id'])
+            req = requests.get(url, headers=headers)
+            # response = urllib2.urlopen(req)
+            # print(req.text)
+            return req
+
+        # If we get a ValueError exception due to a request timing out, we sleep for our error delay, then make
+        # another attempt
+        except Exception as e:
+            log.error(e)
+            # log.error("Sleeping for %i" % self.error_delay)
+            # sleep(self.error_delay)
+            # return self.execute_search(url)
 
     @staticmethod
     def construct_url(query, max_position=None):
@@ -243,6 +280,7 @@ class TwitterSlicer(TwitterSearch):
                 fmt = "%Y-%m-%d %H:%M:%S"
                 log.info("%i [%s] - %s" % (self.counter, t.strftime(fmt), tweet['text']))
 
+
         return True
 
 
@@ -254,12 +292,12 @@ if __name__ == '__main__':
     error_delay_seconds = 5
 
     # Example of using TwitterSearch
-    twit = TwitterSearchImpl(rate_delay_seconds, error_delay_seconds, None)
-    twit.search(search_query)
+    # twit = TwitterSearchImpl(rate_delay_seconds, error_delay_seconds, None)
+    # twit.search(search_query)
 
     # Example of using TwitterSlice
     select_tweets_since = datetime.datetime.strptime("2016-10-01", '%Y-%m-%d')
-    select_tweets_until = datetime.datetime.strptime("2016-12-01", '%Y-%m-%d')
+    select_tweets_until = datetime.datetime.strptime("2016-10-02", '%Y-%m-%d')
     threads = 10
 
     twitSlice = TwitterSlicer(rate_delay_seconds, error_delay_seconds, select_tweets_since, select_tweets_until,
