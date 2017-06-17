@@ -31,15 +31,19 @@ class TwitterSearch(metaclass=ABCMeta):
         :param query:   Query to search Twitter with. Takes form of queries constructed with using Twitters
                         advanced search: https://twitter.com/search-advanced
         """
+        print("perform_search")
         url = self.construct_url(query)
+        print(url)
         continue_search = True
         min_tweet = None
         response = self.execute_search(url)
         while response is not None and continue_search and response['items_html'] is not None:
+            print("while response is not None")
             tweets = self.parse_tweets(response['items_html'])
 
             # If we have no tweets, then we can break the loop early
             if len(tweets) == 0:
+                print("no tweets!")
                 break
 
             # If we haven't set our min tweet yet, set it now
@@ -51,6 +55,7 @@ class TwitterSearch(metaclass=ABCMeta):
             # Our max tweet is the last tweet in the list
             max_tweet = tweets[-1]
             if min_tweet['tweet_id'] is not max_tweet['tweet_id']:
+                print("if min_tweet is not max_tweet")
                 if "min_position" in response.keys():
                     max_position = response['min_position']
                 else:
@@ -66,6 +71,7 @@ class TwitterSearch(metaclass=ABCMeta):
         :param url: URL to search twitter with
         :return: A JSON object with data from Twitter
         """
+        print("execute_search")
         try:
             # Specify a user agent to prevent Twitter from returning a profile card
             headers = {
@@ -86,16 +92,17 @@ class TwitterSearch(metaclass=ABCMeta):
             sleep(self.error_delay)
             return self.execute_search(url)
 
-    @staticmethod
     def parse_tweets(self, items_html):
         """
         Parses Tweets from the given HTML
         :param items_html: The HTML block with tweets
         :return: A JSON list of tweets
         """
+        print(parse_tweets)
         soup = BeautifulSoup(items_html, "html.parser")
         tweets = []
         for li in soup.find_all("li", class_='js-stream-item'):
+            print("for li in soup.find_all")
 
             # If our li doesn't have a tweet-id, we skip it as it's not going to be a tweet.
             if 'data-item-id' not in li.attrs:
@@ -109,7 +116,9 @@ class TwitterSearch(metaclass=ABCMeta):
                 'user_name': None,
                 'created_at': None,
                 'retweets': 0,
-                'favorites': 0
+                'favorites': 0,
+                'geo_text': None,
+                'geo_search': None,
             }
 
             # Tweet Text
@@ -124,14 +133,16 @@ class TwitterSearch(metaclass=ABCMeta):
                 tweet['user_screen_name'] = user_details_div['data-user-id']
                 tweet['user_name'] = user_details_div['data-name']
 
-            data = self.find_geo(tweet)
+            # data = self.find_geo(tweet)
 
-            if data is not None:
-                geo_soup = BeautifulSoup()
-                geo_data = geo_soup.find('span',
-                                         class_='permalink-tweet-geo-text')
-                geo_location_text = geo_data.text
-                geo_location_search = geo_data.select("a")[0]['href']
+            # if data is not None:
+            #     geo_soup = BeautifulSoup()
+            #     geo_data = geo_soup.find('span',
+            #                              class_='permalink-tweet-geo-text')
+            #     geo_text = geo_data.text
+            #     geo_text = geo_text.replace('\n', '').replace('from', '').strip()
+            #     tweet['geo_text'] = geo_text
+            #     tweet['geo_search'] = geo_data.select("a")[0]['href']
 
             # Tweet date
             date_span = li.find("span", class_="_timestamp")
@@ -186,12 +197,12 @@ class TwitterSearch(metaclass=ABCMeta):
         :param max_position: The max_position value to select the next pagination of tweets
         :return: A string URL
         """
-
+        print("construct_url")
         params = {
             # Type Param
             'f': 'tweets',
             # Query Param
-            'q': query
+            'q': query  # + ' near: "Kansas City, MO" within:1700mi'
         }
 
         # If our max_position param is not None, we add it to the parameters
@@ -257,9 +268,11 @@ class TwitterSlicer(TwitterSearch):
         self.counter = 0
 
     def search(self, query):
+        print("multi-thread search")
         n_days = (self.until - self.since).days
         tp = ThreadPoolExecutor(max_workers=self.n_threads)
         for i in range(0, n_days):
+            print("for i in range(0,n_days)")
             since_query = self.since + datetime.timedelta(days=i)
             until_query = self.since + datetime.timedelta(days=(i + 1))
             day_query = "%s since:%s until:%s" % (query, since_query.strftime("%Y-%m-%d"),
@@ -275,7 +288,9 @@ class TwitterSlicer(TwitterSearch):
         for tweet in tweets:
             # Lets add a counter so we only collect a max number of tweets
             self.counter += 1
+            print("save tweets")
             if tweet['created_at'] is not None:
+                print('if tweet[created_at] is not None')
                 t = datetime.datetime.fromtimestamp((tweet['created_at']/1000))
                 fmt = "%Y-%m-%d %H:%M:%S"
                 log.info("%i [%s] - %s" % (self.counter, t.strftime(fmt), tweet['text']))
@@ -287,7 +302,7 @@ class TwitterSlicer(TwitterSearch):
 if __name__ == '__main__':
     log.basicConfig(level=log.INFO)
 
-    search_query = "Babylon 5"
+    search_query = 'allergies'
     rate_delay_seconds = 0
     error_delay_seconds = 5
 
@@ -304,5 +319,5 @@ if __name__ == '__main__':
                               threads)
     twitSlice.search(search_query)
 
-    print("TwitterSearch collected %i" % twit.counter)
+    # print("TwitterSearch collected %i" % twit.counter)
     print("TwitterSlicer collected %i" % twitSlice.counter)
