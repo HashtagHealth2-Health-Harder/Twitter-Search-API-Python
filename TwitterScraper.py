@@ -133,16 +133,16 @@ class TwitterSearch(metaclass=ABCMeta):
                 tweet['user_screen_name'] = user_details_div['data-user-id']
                 tweet['user_name'] = user_details_div['data-name']
 
-            # data = self.find_geo(tweet)
+            data = self.find_geo(tweet)
 
-            # if data is not None:
-            #     geo_soup = BeautifulSoup()
-            #     geo_data = geo_soup.find('span',
-            #                              class_='permalink-tweet-geo-text')
-            #     geo_text = geo_data.text
-            #     geo_text = geo_text.replace('\n', '').replace('from', '').strip()
-            #     tweet['geo_text'] = geo_text
-            #     tweet['geo_search'] = geo_data.select("a")[0]['href']
+            if data is not None:
+                geo_soup = BeautifulSoup()
+                geo_data = geo_soup.find('span',
+                                         class_='permalink-tweet-geo-text')
+                geo_text = geo_data.text
+                geo_text = geo_text.replace('\n', '').replace('from', '').strip()
+                tweet['geo_text'] = geo_text
+                tweet['geo_search'] = geo_data.select("a")[0]['href']
 
             # Tweet date
             date_span = li.find("span", class_="_timestamp")
@@ -268,11 +268,11 @@ class TwitterSlicer(TwitterSearch):
         self.counter = 0
 
     def search(self, query):
-        print("multi-thread search")
+        print("search")
         n_days = (self.until - self.since).days
         tp = ThreadPoolExecutor(max_workers=self.n_threads)
         for i in range(0, n_days):
-            print("for i in range(0,n_days)")
+            print("for i in range")
             since_query = self.since + datetime.timedelta(days=i)
             until_query = self.since + datetime.timedelta(days=(i + 1))
             day_query = "%s since:%s until:%s" % (query, since_query.strftime("%Y-%m-%d"),
@@ -312,7 +312,7 @@ if __name__ == '__main__':
 
     # Example of using TwitterSlice
     select_tweets_since = datetime.datetime.strptime("2016-10-01", '%Y-%m-%d')
-    select_tweets_until = datetime.datetime.strptime("2016-10-02", '%Y-%m-%d')
+    select_tweets_until = datetime.datetime.strptime("2016-11-02", '%Y-%m-%d')
     threads = 10
 
     twitSlice = TwitterSlicer(rate_delay_seconds, error_delay_seconds, select_tweets_since, select_tweets_until,
