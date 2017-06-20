@@ -135,6 +135,15 @@ class TwitterSearch(metaclass=ABCMeta):
             if req is not None:
                 tweet = self.get_geo(req, tweet)
 
+                # Twitter's design makes no sense, tweet could not be tagged
+                # but the search finds it anyway bc of author bio location
+                # thus we must go to the author's bio and get their local
+                if tweet['geo_text'] is None:
+                    # new req for author's profile page
+                    req = self.get_bio(tweet)
+                    # get the bio location itself
+                    tweet = self.get_bio_location(req, tweet)
+
             # Tweet date
             date_span = li.find("span", class_="_timestamp")
             if date_span is not None:
@@ -164,11 +173,10 @@ class TwitterSearch(metaclass=ABCMeta):
         try:
             user_json = user_details_div['data-reply-to-users-json']
             user_json = json.loads(user_json)
-            user_name = user_json[0]['screen_name'] 
+            user_name = user_json[0]['screen_name']
             return user_name
         except Exception as e:
-            log.info("JSON could not be found for tweet.")
-            print(user_details_div)
+            log.error("JSON could not be found for tweet.")
 
     @staticmethod
     def get_geo(req, tweet):
@@ -188,7 +196,42 @@ class TwitterSearch(metaclass=ABCMeta):
             tweet['geo_search'] = geo_data.select("a")[0]['href']
             return tweet
         except Exception as e:
-            print("Could not find geo data, error: {}".format(e))
+            log.error("get_geo() could not find geo data, error: {}".format(e))
+            return tweet
+
+    @staticmethod
+    def get_bio(tweet):
+        """
+        returns request with user profile of tweeter
+        """
+        try:
+            # Specify a user agent to prevent Twitter from returning a profile card
+            headers = {
+                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.'
+                              '86 Safari/537.36'
+            }
+            url = "https://twitter.com/" + tweet['user_screen_name']
+            req = requests.get(url, headers=headers)
+
+            return req
+        # Just give up if we couldn't retrieve :(
+        except Exception as e:
+            log.error('find_bio() could not make req, error: {}'.format(e))
+
+    @staticmethod
+    def get_bio_location(req, tweet):
+        """
+        gets the location in tweet author's bio
+        """
+        try:
+            bio_soup = BeautifulSoup(req.text, 'html.parser')
+            bio_data = bio_soup.find('span', class_='ProfileHeaderCard-locationText')
+            bio_text = bio_data.text
+            bio_text = bio_text.replace('\n', '').strip()
+            tweet['geo_text'] = bio_text
+            return tweet
+        except Exception as e:
+            log.error('get_bio_location() not find bio_location, error: {}'.format(e))
             return tweet
 
     @staticmethod
@@ -210,7 +253,7 @@ class TwitterSearch(metaclass=ABCMeta):
             return req
         # Just give up if we couldn't retrieve :(
         except Exception as e:
-            log.info('Could not retrieve original tweet, error: {}'.format(e))
+            log.error('get_tweet() could not retrieve tweet, error: {}'.format(e))
 
     @staticmethod
     def construct_url(query, max_position=None):
@@ -337,6 +380,9 @@ if __name__ == '__main__':
     rate_delay_seconds = 0
     error_delay_seconds = 5
 
+    # if you want error logging
+    # log.basicConfig(filename='./error.log')
+
     # iterates through search terms and completes a search through time span
     for term in terms:
         # format MUST BE <any search words/query>[space]near:["][location]["][space]within:[distance]mi
@@ -354,8 +400,8 @@ if __name__ == '__main__':
         # twit.search(search_query)
 
         # Example of using TwitterSlice
-        select_tweets_since = datetime.datetime.strptime("2016-10-01", '%Y-%m-%d')
-        select_tweets_until = datetime.datetime.strptime("2016-10-02", '%Y-%m-%d')
+        select_tweets_since = datetime.datetime.strptime("2017-05-01", '%Y-%m-%d')
+        select_tweets_until = datetime.datetime.strptime("2017-6-15", '%Y-%m-%d')
         threads = 10
 
         twitSlice = TwitterSlicer(rate_delay_seconds, error_delay_seconds, select_tweets_since, select_tweets_until,
